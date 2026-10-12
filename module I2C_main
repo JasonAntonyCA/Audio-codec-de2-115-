@@ -1,0 +1,168 @@
+module I2C_main(
+    inout I2C_out, 
+    input clk, 
+    input rst, 
+    input go, 
+    output reg ready, 
+    output reg I2C_clk, 
+    input [7:0] address, 
+    input [15:0] data 
+);
+
+reg I_clk, i2c_en, i2c;
+reg [7:0] icount, state; 
+reg [2:0] acount, dcount;
+
+assign I2C_out = (i2c_en && !i2c) ? 1'b0 : 1'bz;
+
+always @(posedge clk) begin
+    if(rst) begin
+        I_clk <= 1'b0;
+        icount <= 8'b0;
+    end
+    else begin
+        if(icount == 8'd249) begin
+            I_clk <= ~I_clk;
+            icount <= 8'b0;
+        end
+        else begin
+            icount <= icount + 1'b1;
+        end
+    end
+end
+
+always @(posedge I_clk) begin
+    if(rst) begin
+        i2c <= 1'b1;
+        state <= 8'b0;
+        I2C_clk <= 1'b1;
+        acount <= 0;
+        dcount <= 0;
+        i2c_en <= 1'b1;
+        ready <= 1'b1; 
+    end
+    else begin
+        case(state) 
+            8'd0 : begin 
+                i2c <= 1'b1;
+                I2C_clk <= 1'b1;
+                i2c_en <= 1'b1;
+                ready <= 1'b1; 
+                
+                if(go) begin   
+                    ready <= 1'b0;
+                    state <= 8'd1;
+                end
+            end
+            
+            8'd1 : begin 
+                i2c <= 1'b0;
+                state <= 8'd2;
+            end
+            
+            8'd2 : begin 
+                I2C_clk <= 1'b0; 
+                i2c <= address[7 - acount]; 
+                state <= 8'd3;
+            end
+            8'd3 : begin 
+                I2C_clk <= 1'b1;
+                if(acount == 3'd7) begin
+                    state <= 8'd4;
+                    acount <= 3'd0;
+                end
+                else begin
+                    acount <= acount + 1'b1;
+                    state <= 8'd2; 
+                end
+            end
+            
+            8'd4 : begin 
+                I2C_clk <= 1'b0;
+                i2c_en <= 1'b0; 
+                state <= 8'd5;
+            end
+            8'd5 : begin 
+                I2C_clk <= 1'b1;
+                if(I2C_out == 1'b0) state <= 8'd6; 
+                else state <= 8'd0; 
+            end
+            
+            8'd6 : begin 
+                I2C_clk <= 1'b0;
+                i2c_en <= 1'b1;
+                i2c <= data[15 - dcount]; 
+                state <= 8'd7;
+            end
+            8'd7 : begin 
+                I2C_clk <= 1'b1;
+                if(dcount == 3'd7) begin
+                    state <= 8'd8;
+                    dcount <= 3'd0;
+                end
+                else begin
+                    dcount <= dcount + 1'b1;
+                    state <= 8'd6; 
+                end
+            end
+            
+            8'd8 : begin 
+                I2C_clk <= 1'b0;
+                i2c_en <= 1'b0; 
+                state <= 8'd9;
+            end
+            8'd9 : begin 
+                I2C_clk <= 1'b1;
+                if(I2C_out == 1'b0) state <= 8'd10; 
+                else state <= 8'd0; 
+            end
+            
+            8'd10 : begin 
+                I2C_clk <= 1'b0;
+                i2c_en <= 1'b1;
+                i2c <= data[7 - dcount]; 
+                state <= 8'd11;
+            end
+            8'd11 : begin 
+                I2C_clk <= 1'b1;
+                if(dcount == 3'd7) begin
+                    state <= 8'd12;
+                    dcount <= 3'd0;
+                end
+                else begin
+                    dcount <= dcount + 1'b1;
+                    state <= 8'd10; 
+                end
+            end
+            
+            8'd12 : begin 
+                I2C_clk <= 1'b0;
+                i2c_en <= 1'b0; 
+                state <= 8'd13;
+            end
+            8'd13 : begin 
+                I2C_clk <= 1'b1;
+                if(I2C_out == 1'b0) state <= 8'd14; 
+                else state <= 8'd0; 
+            end
+
+            8'd14 : begin 
+                I2C_clk <= 1'b0;
+                i2c_en <= 1'b1;
+                i2c <= 1'b0; 
+                state <= 8'd15;
+            end
+            8'd15 : begin 
+                I2C_clk <= 1'b1;
+                state <= 8'd16;
+            end
+            8'd16 : begin 
+                i2c <= 1'b1; 
+                state <= 8'd0; 
+            end
+            
+            default: state <= 8'd0;
+        endcase
+    end
+end
+endmodule
