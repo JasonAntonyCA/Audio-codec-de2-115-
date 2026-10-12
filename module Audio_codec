@@ -1,0 +1,157 @@
+module Audio_codec(output DAC_lr, DAC_out,  I2C_clk, led , output reg [23:0] dout,
+output reg Codec_clk , input rst , CoBit_clk , clk ,  ADC_out,  ADC_lr, inout I2C_out );
+
+assign DAC_lr = ADC_lr;
+assign DAC_out = ADC_out;
+reg count;
+reg [3:0] bcount;
+reg [24:0] ccount;
+wire [23:0] d;
+reg  pedge , lrp;
+
+always@(posedge clk) begin
+	lrp <= ADC_lr; 
+end
+
+always@(*) begin
+	if(ADC_lr == 1'b0 && lrp == 1'b1)
+		pedge <= 1'b1;
+	else
+		pedge <= 1'b0;
+end
+
+assign led = ADC_out;
+
+wire i2c_ready;
+reg i2c_go;
+reg [3:0] cmd_index;   
+reg [15:0] lut_data; 
+reg [2:0] state;
+reg [15:0] delay_cnt;   
+
+I2C_main i2c_inst (.I2C_out(I2C_out),.clk(clk),.rst(rst),.go(i2c_go),.ready(i2c_ready),  .I2C_clk(I2C_clk),.address(8'h34),.data(lut_data));
+bram ram (.clk(CoBit_clk) , .rst(rst) , .din(ADC_out) , .dout(d));
+
+always @(*) begin
+    case(cmd_index)
+        4'd0:  lut_data = 16'h1E00; 
+		  4'd1:  lut_data = 16'h0C00; 
+        4'd2:  lut_data = 16'h0017; 
+        4'd3:  lut_data = 16'h0217; 
+        4'd4:  lut_data = 16'h0479; 
+        4'd5:  lut_data = 16'h0679; 
+		  4'd6:  lut_data = 16'h0815; 
+        4'd7:  lut_data = 16'h0A00; 
+		  4'd8:  lut_data = 16'h0E4A;
+        4'd9:  lut_data = 16'h1002; 
+        4'd10: lut_data = 16'h1201; 
+		  default: lut_data = 16'h0000;
+    endcase
+end
+
+always @(posedge clk) begin
+    if(rst) begin
+        state <= 3'd0;
+        cmd_index <= 4'd0;
+        i2c_go <= 1'b0;
+        delay_cnt <= 16'd0;
+    end
+    else begin
+        case(state)
+            3'd0: begin
+                if(delay_cnt < 16'hFFFF) begin
+                    delay_cnt <= delay_cnt + 1'b1;
+                end
+                else begin
+                    state <= 3'd1;
+                end
+            end
+            
+            3'd1: begin
+                if(i2c_ready && cmd_index <= 4'd10) begin
+                    i2c_go <= 1'b1; 
+                    state <= 3'd2;
+                end
+                else if (cmd_index > 4'd10) begin
+                    state <= 3'd4; 
+                end
+            end
+            3'd2: begin
+                if(!i2c_ready) begin
+                    i2c_go <= 1'b0; 
+                    state <= 3'd3;
+                end
+            end
+            3'd3: begin
+                if(i2c_ready) begin
+                    cmd_index <= cmd_index + 1'b1; 
+                    state <= 3'd1;                 
+						  end
+            end
+            
+            3'd4: begin
+                i2c_go <= 1'b0;
+            end
+            
+            default: state <= 3'd0;
+        endcase
+		end
+end
+
+always @(posedge clk) begin
+    if(rst) begin
+        Codec_clk <= 1'b0;
+        count <= 1'b0;
+    end
+    else begin
+        if(count == 1'b1) begin
+            Codec_clk <= ~Codec_clk;
+            count <= 1'b0;
+        end
+        else begin
+            count <= count + 1'b1;
+        end
+    end
+end
+
+
+always @(posedge clk) begin
+	if(rst) begin
+		ccount <= 25'd0;
+		dout <= 24'd0;
+	end
+	else begin
+		if(pedge) begin
+			if(ccount == 25'd12499)begin
+				dout <= d;
+				ccount <= 25'd0;
+			end
+			else begin
+				ccount <= ccount + 1'b1;
+				dout <= dout;
+			end
+		end	
+	end
+end
+/*
+always @(posedge clk) begin
+    if(rst) begin
+        ccount <= 25'd0;
+        dout <= 24'd0;
+    end
+    else begin
+        // Increment continuously based on the main clk
+        if(ccount == 25'd124999) begin
+            dout <= d;
+            ccount <= 25'd0;
+        end
+        else begin
+            ccount <= ccount + 1'b1;
+        end
+    end
+end*/
+endmodule
+
+
+
+
