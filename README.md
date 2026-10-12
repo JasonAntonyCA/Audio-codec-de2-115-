@@ -1,2 +1,2 @@
 # Audio-codec-de2-115-
-Acquisation of audio signal data from the audio codec present in DE2-115 FPGA and visualizing the signal using LEDs present in the board
+Audio Signal Acquisition from the DE2-115 FPGA Audio Codec and Signal Visualization Using On-Board LEDs
